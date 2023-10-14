@@ -25,9 +25,11 @@ use paste::paste;
 //     LocalSet,
 // }
 
-trait Instruction: validate::Validate + execution::Execute {}
+trait Instruction: validate::Validate + execution::Execute {
+    fn to_valtype(self) -> validate::ValType;
+}
 
-macro_rules! arithmetic_instr {
+macro_rules! numeric_instr {
     ($name:ident) => {
         // name is the name of the enum
         #[derive(Debug)]
@@ -38,64 +40,22 @@ macro_rules! arithmetic_instr {
             F64,
         }
 
-        impl Validate for $name {
-            // fn execute(&self, store: &mut Store, context: &mut Context) {
-            //     use $name::*;
-            //     match self {
-            //         I32 => {
-            //             todo!()
-            //         }
-            //         I64 => {
-            //             todo!()
-            //         }
-            //         F32 => {
-            //             todo!()
-            //         }
-            //         F64 => {
-            //             todo!()
-            //         }
-            //     }
-            // }
-            // fn validate(
-            //     &self,
-            //     validation_context: &mut ValidationCtx,
-            //     _context: &mut Context,
-            // ) -> validate::Result<()> {
-            //     use $name::*;
-            //     validate_binary!(self, validation_context)
-            // }
+        impl Instruction for $name {
+            fn to_valtype(self) -> validate::ValType {
+                use $name::*;
+                match self {
+                    I32 => ValType::I32,
+                    I64 => ValType::I64,
+                    F32 => ValType::F32,
+                    F64 => ValType::F64,
+                }
+            }
         }
     };
-}
 
-arithmetic_instr!(Add);
-arithmetic_instr!(Sub);
-arithmetic_instr!(Mul);
-
-#[derive(Debug)]
-enum Div {
-    I32,
-    I64,
-    U32,
-    U64,
-    F32,
-    F64,
-}
-
-impl Instruction for Div {
-    fn execute(&self, store: &mut Store, context: &mut Context) {
-        todo!()
-    }
-
-    fn validate(&self, v_ctx: &mut ValidationCtx, _context: &mut Context) -> validate::Result<()> {
-        use Div::*;
-        validate_binary_signed!(self, v_ctx)
-    }
-}
-
-macro_rules! comparison_operator {
-    ($name:ident, $op:tt) => {
-        #[derive(Denode_in_pool, bug)]
+    ($name:ident, signed) => {
+        // name is the name of the enum
+        #[derive(Debug)]
         pub enum $name {
             I32,
             I64,
@@ -106,119 +66,118 @@ macro_rules! comparison_operator {
         }
 
         impl Instruction for $name {
-            fn execute(&self, store: &mut Store, context: &mut Context) {
-                // let res = context.stack[0] $op context.stack[1];
-                // context.stack.trim(2);
-                // context.stack.push(res);
-            }
-
-            fn validate(
-                &self,
-                v_ctx: &mut ValidationCtx,
-                _context: &mut Context,
-            ) -> validate::Result<()> {
+            fn to_valtype(self) -> validate::ValType {
                 use $name::*;
                 match self {
-                    I32 | U32 => v_ctx.validate_boolean_op(Some(ValType::I32)),
-                    I64 | U64 => v_ctx.validate_boolean_op(Some(ValType::I64)),
-                    F32 => v_ctx.validate_boolean_op(Some(ValType::F32)),
-                    F64 => v_ctx.validate_boolean_op(Some(ValType::F64)),
+                    I32 | U32 => ValType::I32,
+                    I64 | U64 => ValType::I64,
+                    F32 => ValType::F32,
+                    F64 => ValType::F64,
                 }
             }
         }
+        // impl Instruction for $name {}
     };
-}
 
-comparison_operator!(Gt, >);
-comparison_operator!(Ge, >=);
-comparison_operator!(Lt, <);
-comparison_operator!(Le, <=);
-
-macro_rules! equality_operator {
-    ($name:ident, $op:tt) => {
+    ($name:ident, dual) => {
+        // name is the name of the enum
         #[derive(Debug)]
         pub enum $name {
             I32,
             I64,
+        }
+
+        impl Instruction for $name {
+            fn to_valtype(self) -> validate::ValType {
+                use $name::*;
+                match self {
+                    I32 => ValType::I32,
+                    I64 => ValType::I64,
+                }
+            }
+        }
+
+        // impl Instruction for $name {}
+    };
+
+    ($name:ident, dual, signed) => {
+        // name is the name of the enum
+        #[derive(Debug)]
+        pub enum $name {
+            I32,
+            I64,
+            U32,
+            U64,
+        }
+        // impl Instruction for $name {}
+        impl Instruction for $name {
+            fn to_valtype(self) -> validate::ValType {
+                use $name::*;
+                match self {
+                    I32 | U32 => ValType::I32,
+                    I64 | U64 => ValType::I64,
+                }
+            }
+        }
+    };
+
+    ($name:ident, float) => {
+        // name is the name of the enum
+        #[derive(Debug)]
+        pub enum $name {
             F32,
             F64,
         }
 
         impl Instruction for $name {
-            fn execute(&self, store: &mut Store, context: &mut Context) {
-                // let res = context.stack[0] $op context.stack[1];
-                // context.stack.trim(2);
-                // context.stack.push(res);
-            }
-
-            fn validate(
-                &self,
-                v_ctx: &mut ValidationCtx,
-                _context: &mut Context,
-            ) -> validate::Result<()> {
+            fn to_valtype(self) -> validate::ValType {
                 use $name::*;
                 match self {
-                    I32 => v_ctx.validate_boolean_op(Some(ValType::I32)),
-                    I64 => v_ctx.validate_boolean_op(Some(ValType::I64)),
-                    F32 => v_ctx.validate_boolean_op(Some(ValType::F32)),
-                    F64 => v_ctx.validate_boolean_op(Some(ValType::F64)),
+                    F32 => ValType::F32,
+                    F64 => ValType::F64,
                 }
             }
         }
+        // impl Instruction for $name {}
     };
 }
 
-equality_operator!(WasmEq, ==);
-equality_operator!(Ne, !=);
+numeric_instr!(Add);
+numeric_instr!(Sub);
+numeric_instr!(Mul);
+numeric_instr!(Div, signed);
+numeric_instr!(Gt, signed);
+numeric_instr!(Ge, signed);
+numeric_instr!(Lt, signed);
+numeric_instr!(Le, signed);
+numeric_instr!(WasmEq);
+numeric_instr!(Ne);
+numeric_instr!(Const);
 
-#[derive(Debug)]
-enum Eqz {
-    I32,
-    I64,
-}
+numeric_instr!(And, dual);
+numeric_instr!(Or, dual);
+numeric_instr!(Rem, dual, signed);
 
-impl Instruction for Eqz {
-    fn execute(&self, store: &mut Store, context: &mut Context) {
-        todo!()
-    }
+numeric_instr!(Eqz, dual);
+numeric_instr!(Xor, dual);
+numeric_instr!(Rotl, dual);
+numeric_instr!(Rotr, dual);
+numeric_instr!(Clz, dual);
+numeric_instr!(Ctz, dual);
+numeric_instr!(Popcnt, dual);
+numeric_instr!(Shl, dual);
+numeric_instr!(Shr, dual, signed);
+// impl Instruction for Eqz {}
 
-    fn validate(&self, v_ctx: &mut ValidationCtx, context: &mut Context) -> validate::Result<()> {
-        match self {
-            Eqz::I32 => {
-                v_ctx.pop_val_expect(Some(ValType::I32))?;
-            }
-            Eqz::I64 => {
-                v_ctx.pop_val_expect(Some(ValType::I64))?;
-            }
-        }
-        v_ctx.push_val(Some(ValType::I32));
-        Ok(())
-    }
-}
-
-enum Const {
-    I32,
-    I64,
-    F32,
-    F64,
-}
-
-impl Instruction for Const {
-    fn execute(&self, store: &mut Store, context: &mut Context) {
-        todo!()
-    }
-
-    fn validate(&self, v_ctx: &mut ValidationCtx, context: &mut Context) -> validate::Result<()> {
-        match self {
-            Const::I32 => v_ctx.push_val(Some(ValType::I32)),
-            Const::I64 => v_ctx.push_val(Some(ValType::I64)),
-            Const::F32 => v_ctx.push_val(Some(ValType::F32)),
-            Const::F64 => v_ctx.push_val(Some(ValType::F64)),
-        }
-
-        Ok(())
-    }
-}
+numeric_instr!(Min, float);
+numeric_instr!(Max, float);
+numeric_instr!(CopySign, float);
+numeric_instr!(Abs, float);
+numeric_instr!(Neg, float);
+numeric_instr!(Ceil, float);
+numeric_instr!(Floor, float);
+numeric_instr!(Nearest, float);
+numeric_instr!(Sqrt, float);
 
 #[derive(Debug)]
 enum Get {
@@ -506,4 +465,22 @@ fn from(value: u8) -> () {
 
 // impl $name {
 //     fn $op() {}
+// }
+
+// fn execute(&self, store: &mut Store, context: &mut Context) {
+//     use $name::*;
+//     match self {
+//         I32 => {
+//             todo!()
+//         }
+//         I64 => {
+//             todo!()
+//         }
+//         F32 => {
+//             todo!()
+//         }
+//         F64 => {
+//             todo!()
+//         }
+//     }
 // }

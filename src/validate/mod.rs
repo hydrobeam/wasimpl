@@ -104,6 +104,18 @@ impl<'a> ValidationCtx<'a> {
         self.push_val(Some(ValType::I32));
         Ok(())
     }
+
+    pub fn validate_const(&mut self, val: Option<ValType>) -> Result<()> {
+        self.push_val(val);
+        Ok(())
+    }
+
+    // pub fn validate_dual_op(&mut self, val: Option<ValType>) -> Result<()> {
+    //     self.pop_val_expect(val)?;
+    //     self.pop_val_expect(val)?;
+    //     self.push_val(val);
+    //     Ok(())
+    // }
 }
 
 impl<'a> ValidationCtx<'a> {

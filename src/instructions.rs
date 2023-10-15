@@ -2,7 +2,7 @@ use std::ops::{Add as OtherAdd, Div as OtherDiv, Mul as OtherMul, Sub as OtherSu
 
 use crate::execution;
 use crate::module::Module;
-use crate::runtime::{Context, Store};
+// use crate::runtime::{Context, Store};
 use crate::validate::{self, CtrlStack, ValStack, ValType, ValidationCtx};
 use paste::paste;
 // control
@@ -25,14 +25,21 @@ use paste::paste;
 //     LocalSet,
 // }
 
-trait Instruction: validate::Validate + execution::Execute {
+pub trait Instruction // : validate::Validate // + execution::Execute
+{
+}
+
+pub trait NumericInstr: Instruction {
     fn to_valtype(self) -> validate::ValType;
 }
 
+// numerics
+//
+// these are very generic so we (ab)use macros to reduce the amount of boilerplate
+
 macro_rules! numeric_instr {
     ($name:ident) => {
-        // name is the name of the enum
-        #[derive(Debug)]
+        #[derive(Debug, Clone, Copy)]
         pub enum $name {
             I32,
             I64,
@@ -40,7 +47,8 @@ macro_rules! numeric_instr {
             F64,
         }
 
-        impl Instruction for $name {
+        impl Instruction for $name {}
+        impl NumericInstr for $name {
             fn to_valtype(self) -> validate::ValType {
                 use $name::*;
                 match self {
@@ -54,8 +62,7 @@ macro_rules! numeric_instr {
     };
 
     ($name:ident, signed) => {
-        // name is the name of the enum
-        #[derive(Debug)]
+        #[derive(Debug, Clone, Copy)]
         pub enum $name {
             I32,
             I64,
@@ -65,7 +72,9 @@ macro_rules! numeric_instr {
             F64,
         }
 
-        impl Instruction for $name {
+        impl Instruction for $name {}
+
+        impl NumericInstr for $name {
             fn to_valtype(self) -> validate::ValType {
                 use $name::*;
                 match self {
@@ -76,18 +85,17 @@ macro_rules! numeric_instr {
                 }
             }
         }
-        // impl Instruction for $name {}
     };
 
-    ($name:ident, dual) => {
-        // name is the name of the enum
-        #[derive(Debug)]
+    ($name:ident, integer) => {
+        #[derive(Debug, Clone, Copy)]
         pub enum $name {
             I32,
             I64,
         }
 
-        impl Instruction for $name {
+        impl Instruction for $name {}
+        impl NumericInstr for $name {
             fn to_valtype(self) -> validate::ValType {
                 use $name::*;
                 match self {
@@ -96,21 +104,20 @@ macro_rules! numeric_instr {
                 }
             }
         }
-
-        // impl Instruction for $name {}
     };
 
-    ($name:ident, dual, signed) => {
-        // name is the name of the enum
-        #[derive(Debug)]
+    ($name:ident, integer, signed) => {
+        #[derive(Debug, Clone, Copy)]
         pub enum $name {
             I32,
             I64,
             U32,
             U64,
         }
-        // impl Instruction for $name {}
-        impl Instruction for $name {
+
+        impl Instruction for $name {}
+
+        impl NumericInstr for $name {
             fn to_valtype(self) -> validate::ValType {
                 use $name::*;
                 match self {
@@ -122,14 +129,14 @@ macro_rules! numeric_instr {
     };
 
     ($name:ident, float) => {
-        // name is the name of the enum
-        #[derive(Debug)]
+        #[derive(Debug, Clone, Copy)]
         pub enum $name {
             F32,
             F64,
         }
 
-        impl Instruction for $name {
+        impl Instruction for $name {}
+        impl NumericInstr for $name {
             fn to_valtype(self) -> validate::ValType {
                 use $name::*;
                 match self {
@@ -138,7 +145,6 @@ macro_rules! numeric_instr {
                 }
             }
         }
-        // impl Instruction for $name {}
     };
 }
 
@@ -150,23 +156,25 @@ numeric_instr!(Gt, signed);
 numeric_instr!(Ge, signed);
 numeric_instr!(Lt, signed);
 numeric_instr!(Le, signed);
+
 numeric_instr!(WasmEq);
 numeric_instr!(Ne);
+
 numeric_instr!(Const);
 
-numeric_instr!(And, dual);
-numeric_instr!(Or, dual);
-numeric_instr!(Rem, dual, signed);
+numeric_instr!(And, integer);
+numeric_instr!(Or, integer);
+numeric_instr!(Rem, integer, signed);
 
-numeric_instr!(Eqz, dual);
-numeric_instr!(Xor, dual);
-numeric_instr!(Rotl, dual);
-numeric_instr!(Rotr, dual);
-numeric_instr!(Clz, dual);
-numeric_instr!(Ctz, dual);
-numeric_instr!(Popcnt, dual);
-numeric_instr!(Shl, dual);
-numeric_instr!(Shr, dual, signed);
+numeric_instr!(Eqz, integer);
+numeric_instr!(Xor, integer);
+numeric_instr!(Rotl, integer);
+numeric_instr!(Rotr, integer);
+numeric_instr!(Clz, integer);
+numeric_instr!(Ctz, integer);
+numeric_instr!(Popcnt, integer);
+numeric_instr!(Shl, integer);
+numeric_instr!(Shr, integer, signed);
 // impl Instruction for Eqz {}
 
 numeric_instr!(Min, float);
@@ -179,10 +187,243 @@ numeric_instr!(Floor, float);
 numeric_instr!(Nearest, float);
 numeric_instr!(Sqrt, float);
 
-#[derive(Debug)]
-enum Get {
-    Local,
-    Global,
+// memory
+
+pub trait MemInstr: Instruction {
+    fn memarg(self) -> MemArg;
+    fn to_valtype(self) -> validate::ValType;
+}
+
+macro_rules! mem_instr {
+    ($name:ident) => {
+        #[derive(Debug, Clone, Copy)]
+        pub enum $name {
+            I32(MemArg),
+            I64(MemArg),
+            F32(MemArg),
+            F64(MemArg),
+        }
+
+        impl Instruction for $name {}
+
+        impl MemInstr for $name {
+            fn to_valtype(self) -> validate::ValType {
+                use $name::*;
+                match self {
+                    I32(_) => ValType::I32,
+                    I64(_) => ValType::I64,
+                    F32(_) => ValType::F32,
+                    F64(_) => ValType::F64,
+                }
+            }
+            fn memarg(self) -> MemArg {
+                use $name::*;
+                match self {
+                    I32(mem) | I64(mem) | F32(mem) | F64(mem) => mem,
+                }
+            }
+        }
+    };
+
+    ($name:ident, integer) => {
+        #[derive(Debug, Clone, Copy)]
+        pub enum $name {
+            I32(MemArg),
+            I64(MemArg),
+        }
+
+        impl Instruction for $name {}
+        impl MemInstr for $name {
+            fn to_valtype(self) -> validate::ValType {
+                use $name::*;
+                match self {
+                    I32(_) => ValType::I32,
+                    I64(_) => ValType::I64,
+                }
+            }
+            fn memarg(self) -> MemArg {
+                use $name::*;
+                match self {
+                    I32(mem) | I64(mem) => mem,
+                }
+            }
+        }
+    };
+
+    ($name:ident, integer, signed) => {
+        #[derive(Debug, Clone, Copy)]
+        pub enum $name {
+            I32(MemArg),
+            I64(MemArg),
+            U32(MemArg),
+            U64(MemArg),
+        }
+
+        impl Instruction for $name {}
+
+        impl MemInstr for $name {
+            fn to_valtype(self) -> validate::ValType {
+                use $name::*;
+                match self {
+                    I32(_) | U32(_) => ValType::I32,
+                    I64(_) | U64(_) => ValType::I64,
+                }
+            }
+            fn memarg(self) -> MemArg {
+                use $name::*;
+                match self {
+                    I32(mem) | I64(mem) | U32(mem) | U64(mem) => mem,
+                }
+            }
+        }
+    };
+}
+
+#[derive(Clone, Copy, Debug)]
+pub struct MemArg {
+    offset: u32,
+    align: u32,
+}
+
+// loads
+
+mem_instr!(Load);
+mem_instr!(Load8, integer, signed);
+mem_instr!(Load16, integer, signed);
+
+#[derive(Clone, Copy, Debug)]
+pub enum Load32 {
+    I64(MemArg),
+    U64(MemArg),
+}
+
+impl Instruction for Load32 {}
+
+impl MemInstr for Load32 {
+    fn to_valtype(self) -> validate::ValType {
+        ValType::I64
+    }
+    fn memarg(self) -> MemArg {
+        match self {
+            Load32::I64(mem) | Load32::U64(mem) => mem,
+        }
+    }
+}
+
+// stores
+mem_instr!(Store);
+mem_instr!(Store8, integer);
+mem_instr!(Store16, integer);
+
+#[derive(Clone, Copy, Debug)]
+pub struct Store32 {
+    memarg: MemArg,
+}
+
+impl Instruction for Store32 {}
+impl MemInstr for Store32 {
+    fn to_valtype(self) -> validate::ValType {
+        ValType::I64
+    }
+    fn memarg(self) -> MemArg {
+        self.memarg
+    }
+}
+// variable instructions
+
+pub trait VariableInstr: Instruction {
+    fn idx(self) -> u32;
+}
+
+#[derive(Debug, Copy, Clone)]
+pub enum Get {
+    Local { idx: u32 },
+    Global { idx: u32 },
+}
+
+impl Instruction for Get {}
+impl VariableInstr for Get {
+    fn idx(self) -> u32 {
+        match self {
+            Get::Local { idx } | Get::Global { idx } => idx,
+        }
+    }
+}
+
+#[derive(Debug, Copy, Clone)]
+pub enum Set {
+    Local { idx: u32 },
+    Global { idx: u32 },
+}
+
+impl Instruction for Set {}
+impl VariableInstr for Set {
+    fn idx(self) -> u32 {
+        match self {
+            Set::Local { idx } | Set::Global { idx } => idx,
+        }
+    }
+}
+
+// Local only
+#[derive(Debug, Copy, Clone)]
+pub struct Tee {
+    idx: u32,
+}
+
+impl Instruction for Tee {}
+impl VariableInstr for Tee {
+    fn idx(self) -> u32 {
+        self.idx
+    }
+}
+
+#[derive(Debug, Copy, Clone)]
+pub enum Memory {
+    Grow,
+    Size,
+    Fill,
+    Copy,
+    // FIXME proper type
+    Init { dataidx: u32 },
+}
+impl Instruction for Memory {}
+
+// parametric
+
+pub struct Drop;
+pub struct Select {
+    pub val: Option<ValType>,
+}
+
+impl Instruction for Drop {}
+impl Instruction for Select {}
+
+#[derive(Copy, Clone, Debug)]
+struct Nop;
+#[derive(Debug, Copy, Clone)]
+struct Unreachable;
+
+#[derive(Debug, Clone, Copy)]
+pub enum BlockType {
+    Idx(u32),
+    ValType(ValType),
+}
+
+pub struct Block {
+    blocktype: BlockType,
+    instructions: Vec<Box<dyn Instruction>>,
+}
+
+pub struct Loop {
+    blocktype: BlockType,
+    instructions: Vec<Box<dyn Instruction>>,
+}
+
+pub struct If {
+    blocktype: BlockType,
+    true_instructions: Vec<Box<dyn Instruction>>,
+    false_instructions: Vec<Box<dyn Instruction>>,
 }
 
 fn from(value: u8) -> () {

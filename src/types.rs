@@ -19,6 +19,9 @@ pub enum ValidationError {
         msg: String,
     },
     Catastrophic,
+    Message {
+        msg: String,
+    },
 }
 
 pub enum ExecutionError {

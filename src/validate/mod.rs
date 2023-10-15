@@ -5,9 +5,14 @@ mod instructions;
 pub type Result<T> = std::result::Result<T, ValidationError>;
 use std::ops::{Deref, DerefMut, Index, IndexMut};
 
-use crate::{module::Module, runtime::Context, types::ValidationError};
+use crate::{
+    instructions::{Instruction, MemArg},
+    module::Module,
+    runtime::Context,
+    types::ValidationError,
+};
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ValType {
     I32,
     I64,
@@ -85,7 +90,7 @@ impl<'a> DerefMut for CtrlStack<'a> {
 
 #[derive(Debug)]
 pub struct ValidationCtx<'a> {
-    module: Module,
+    module: &'a Module,
     ctrls: CtrlStack<'a>,
     vals: ValStack,
 }
@@ -105,17 +110,29 @@ impl<'a> ValidationCtx<'a> {
         Ok(())
     }
 
-    pub fn validate_const(&mut self, val: Option<ValType>) -> Result<()> {
+    pub fn validate_single_boolean_op(&mut self, val: Option<ValType>) -> Result<()> {
+        self.pop_val_expect(val)?;
+        self.push_val(Some(ValType::I32));
+        Ok(())
+    }
+
+    // a little redundant (does one thing), but nice for macros / consistency
+    pub fn validate_push_op(&mut self, val: Option<ValType>) -> Result<()> {
         self.push_val(val);
         Ok(())
     }
 
-    // pub fn validate_dual_op(&mut self, val: Option<ValType>) -> Result<()> {
-    //     self.pop_val_expect(val)?;
-    //     self.pop_val_expect(val)?;
-    //     self.push_val(val);
-    //     Ok(())
-    // }
+    pub fn validate_single_op(&mut self, val: Option<ValType>) -> Result<()> {
+        self.pop_val_expect(val)?;
+        self.push_val(val);
+        Ok(())
+    }
+
+    pub fn validate_mem_op(&mut self, val: Option<ValType>, memarg: MemArg) -> Result<()> {
+        self.pop_val_expect(val)?;
+        self.push_val(val);
+        Ok(())
+    }
 }
 
 impl<'a> ValidationCtx<'a> {
@@ -142,7 +159,7 @@ impl<'a> ValidationCtx<'a> {
         let actual = self.pop_val()?;
         // FIXME: double writing
         if let Some(in_acc) = actual {
-            if let Some(in_expect) = expect {
+            if let Some(_) = expect {
                 Ok(Some(in_acc))
             } else {
                 Err(ValidationError::TypeMismatch {

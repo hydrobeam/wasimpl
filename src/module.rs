@@ -1,59 +1,56 @@
-use crate::{
-    runtime::Store,
-    types::{ExternVal, ValType, WasmError},
-};
+use crate::types::{ExternVal, ValType, WasmError};
 
 #[derive(Debug)]
-struct Mem;
+pub struct Mem;
 
 #[derive(Debug)]
-struct Data;
+pub struct Data;
 
 #[derive(Debug)]
 pub struct Module {
-    types: Vec<FuncType>,
-    funcs: Vec<Func>,
-    tables: Vec<Table>,
-    mems: Vec<Mem>,
-    globals: Vec<Global>,
-    elem: Vec<Elem>,
-    data: Vec<Data>,
+    pub types: Vec<FuncType>,
+    pub funcs: Vec<Func>,
+    pub tables: Vec<Table>,
+    pub mems: Vec<Mem>,
+    pub globals: Vec<Global>,
+    pub elem: Vec<Elem>,
+    pub data: Vec<Data>,
     // Index of a function
     // https://www.w3.org/TR/wasm-core-1/#start-function
-    start: usize,
-    imports: Vec<Import>,
-    exports: Vec<Export>,
+    pub start: usize,
+    pub imports: Vec<Import>,
+    pub exports: Vec<Export>,
 }
 
 #[derive(Debug)]
-struct FuncType {}
+pub struct FuncType {}
 #[derive(Debug)]
-struct Func {}
+pub struct Func {}
 #[derive(Debug)]
-struct Table {}
+pub struct Table {}
 #[derive(Debug)]
-struct Global {
+pub struct Global {
     kind: ValType,
     mutable: bool,
 }
 #[derive(Debug)]
-struct Elem {}
+pub struct Elem {}
 
 #[derive(Debug)]
-struct Import {
+pub struct Import {
     name: String,
     description: ImportExportDescription,
 }
 
 #[derive(Debug)]
-struct Export {
+pub struct Export {
     module_name: String,
     name: String,
     description: ImportExportDescription,
 }
 
 #[derive(Debug)]
-struct ModuleInstance {}
+pub struct ModuleInstance {}
 
 // There is one difference between the descriptions for in/out, but we
 // ignore it (the spec says embeddings can choose not to implement it.)
@@ -81,7 +78,7 @@ impl Module {
         todo!()
     }
 
-    fn instantiate(&self, store: &mut Store, external_vals: &[ExternVal]) -> () {
-        todo!()
-    }
+    // fn instantiate(&self, store: &mut Store, external_vals: &[ExternVal]) -> () {
+    //     todo!()
+    // }
 }

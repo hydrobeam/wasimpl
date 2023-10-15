@@ -1,3 +1,5 @@
+// #![feature(concat_idents)]
+
 use types::WasmError;
 
 mod execution;

@@ -6,8 +6,8 @@ pub struct Context {
     pub locals: Vec<StackVal>,
 }
 
-#[derive(Debug)]
-pub struct Store {}
+// #[derive(Debug)]
+// pub struct Store {}
 // pub enum StackVal {
 //     Num(NumType),
 //     Label { arity: u8 },

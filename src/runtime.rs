@@ -1,11 +1,5 @@
 use std::ops::{Deref, DerefMut, Index, IndexMut};
 
-#[derive(Debug)]
-pub struct Context {
-    pub stack: Stack,
-    pub locals: Vec<StackVal>,
-}
-
 // #[derive(Debug)]
 // pub struct Store {}
 // pub enum StackVal {

@@ -5,43 +5,23 @@ mod instructions;
 pub type Result<T> = std::result::Result<T, ValidationError>;
 use std::ops::{Deref, DerefMut, Index, IndexMut};
 
-use crate::{
-    instructions::{Instruction, MemArg},
-    module::Module,
-    runtime::Context,
-    types::ValidationError,
-};
+use crate::types::ValType;
+
+use crate::types::{Locals, ValidationError};
+use crate::module::Module;
+use crate::instructions::MemArg;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum ValType {
-    I32,
-    I64,
-    F32,
-    F64,
-    V128,
-    FuncRef,
-    ExternRef,
-}
-
-impl ValType {
-    fn is_num(self) -> bool {
-        matches!(
-            self,
-            ValType::F32 | ValType::F64 | ValType::I32 | ValType::I64
-        )
-    }
-    fn is_vec(self) -> bool {
-        matches!(self, ValType::V128)
-    }
-
-    fn is_ref(self) -> bool {
-        matches!(self, ValType::FuncRef | ValType::ExternRef)
-    }
+pub enum LabelType {
+    Block,
+    Loop,
+    If,
+    Else,
 }
 
 #[derive(Debug, Clone, Copy)]
 pub struct CtrlFrame<'a> {
-    opcode: u32,
+    opcode: LabelType,
     start_types: &'a [ValType],
     end_types: &'a [ValType],
     height: usize,
@@ -89,13 +69,28 @@ impl<'a> DerefMut for CtrlStack<'a> {
 }
 
 #[derive(Debug)]
-pub struct ValidationCtx<'a> {
-    module: &'a Module,
-    ctrls: CtrlStack<'a>,
+pub struct ValidationCtx<'module> {
+    module: &'module Module,
+    ctrls: CtrlStack<'module>,
     vals: ValStack,
 }
 
-impl<'a> ValidationCtx<'a> {
+impl<'module> ValidationCtx<'module> {
+    pub fn validate_br_op(&mut self, label_idx: u32) -> Result<()> {
+        if self.ctrls.len() < label_idx as usize {
+            Err(ValidationError::Message { msg: "bad".into() })
+        } else {
+            // clones
+            let temp = self.ctrls[label_idx as usize];
+            let lt = ValidationCtx::label_types(&temp);
+
+            self.pop_vals(lt)?;
+            self.push_vals(lt);
+
+            Ok(())
+        }
+    }
+
     pub fn validate_binary_op(&mut self, val: Option<ValType>) -> Result<()> {
         self.pop_val_expect(val)?;
         self.pop_val_expect(val)?;
@@ -129,13 +124,36 @@ impl<'a> ValidationCtx<'a> {
     }
 
     pub fn validate_mem_op(&mut self, val: Option<ValType>, memarg: MemArg) -> Result<()> {
+        // TODO: use memargs
         self.pop_val_expect(val)?;
         self.push_val(val);
         Ok(())
     }
+
+    pub fn validate_else_op(&mut self) -> Result<()> {
+        // very hacky, but we run into double mutable borrows
+        // if we allow pop_ctrl do its thang
+        let frame = self.ctrls[0];
+        self.pop_ctrl()?;
+        if LabelType::If != frame.opcode {
+            Err(ValidationError::Message {
+                msg: "use of `else` in non-if control instruction".to_string(),
+            })?
+        };
+        self.push_ctrl(LabelType::Else, frame.start_types, frame.end_types)?;
+
+        Ok(())
+    }
+
+    pub fn validate_end_op(&mut self) -> Result<()> {
+        let frame = self.ctrls[0];
+        self.pop_ctrl()?;
+        self.push_vals(frame.end_types);
+        Ok(())
+    }
 }
 
-impl<'a> ValidationCtx<'a> {
+impl<'module> ValidationCtx<'module> {
     pub fn len_vals(&self) -> usize {
         self.vals.len()
     }
@@ -197,7 +215,7 @@ impl<'a> ValidationCtx<'a> {
 impl<'a> ValidationCtx<'a> {
     pub fn push_ctrl(
         &mut self,
-        opcode: u32,
+        opcode: LabelType,
         start_types: &'a [ValType],
         end_types: &'a [ValType],
     ) -> Result<()> {
@@ -212,7 +230,7 @@ impl<'a> ValidationCtx<'a> {
         Ok(())
     }
 
-    pub fn pop_ctrl(&mut self, vals: &mut ValStack) -> Result<&'a CtrlFrame> {
+    pub fn pop_ctrl(&mut self) -> Result<()> {
         if self.ctrls.is_empty() {
             Err(ValidationError::Catastrophic)?
         }
@@ -220,20 +238,19 @@ impl<'a> ValidationCtx<'a> {
         let h = frame.height;
         self.pop_vals(frame.end_types)?;
 
-        if vals.len() != h {
+        if self.vals.len() != h {
             Err(ValidationError::InvalidDepth {
-                max_depth: vals.len() as u8,
+                max_depth: self.vals.len() as u8,
                 got_depth: h as u8,
             })?
         }
         // REVIEW: borrow checking error when returning frame var,
         // don't know how to resolve.
-        Ok(&self.ctrls[0])
+        Ok(())
     }
 
     pub fn label_types(frame: &'a CtrlFrame) -> &'a [ValType] {
-        // FIXME: loop
-        if frame.opcode == 0x13 {
+        if let LabelType::Loop = frame.opcode {
             frame.start_types
         } else {
             frame.end_types
@@ -247,5 +264,9 @@ impl<'a> ValidationCtx<'a> {
 }
 
 pub trait Validate {
-    fn validate(&self, v_ctx: &mut ValidationCtx, context: &mut Context) -> Result<()>;
+    fn validate<'module>(
+        &'module self,
+        v_ctx: &mut ValidationCtx<'module>,
+        context: &mut Locals,
+    ) -> Result<()>;
 }

@@ -1,4 +1,6 @@
-use crate::types::{ExternVal, ValType, WasmError};
+use crate::instructions::Instruction;
+use crate::types::ValType;
+use crate::types::{ExternVal, WasmError};
 
 #[derive(Debug)]
 pub struct Mem;
@@ -23,15 +25,24 @@ pub struct Module {
 }
 
 #[derive(Debug)]
-pub struct FuncType {}
+pub struct FuncType {
+    pub in_types: Vec<ValType>,
+    pub out_types: Vec<ValType>,
+}
+
 #[derive(Debug)]
-pub struct Func {}
+pub struct Func {
+    typeidx: u32,
+    locals: Vec<ValType>,
+    body: Vec<Box<dyn Instruction>>,
+}
+
 #[derive(Debug)]
 pub struct Table {}
 #[derive(Debug)]
 pub struct Global {
-    kind: ValType,
-    mutable: bool,
+    pub kind: ValType,
+    pub mutable: bool,
 }
 #[derive(Debug)]
 pub struct Elem {}

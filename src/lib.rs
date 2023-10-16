@@ -2,6 +2,7 @@
 
 use types::WasmError;
 
+mod decode;
 mod execution;
 mod instructions;
 mod module;
